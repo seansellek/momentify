@@ -1,7 +1,7 @@
 {
   "name": "momentify",
   "version": "1.0.0",
-  "description": "Set wallpaper and respond with quote for momentum ",
+  "description": "Set wallpaper and log quote json for momentum.",
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
