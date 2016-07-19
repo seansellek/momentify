@@ -6,67 +6,83 @@
 */
 
 var fs = require('fs');
-
-if (process.argv[2] == 'stop') {
-  var pid = Number(fs.readFileSync(__dirname + '/pid').toString());
-  console.log('Stopping the momentum-wallpapers daemon.');
-  try {
-    process.kill(pid, 'SIGUSR1');
-  }
-  catch (err) {
-    console.log('Error: Daemon already stopped or was never launched.');
-  }
-  process.exit();
-}
-
-console.log('momentum-wallpapers now running in the background.');
-console.log('Type "momentum-wallpapers stop" to stop it.');
-require('daemon')();
-
-process.on('SIGUSR1', function() {
-  process.exit();
-});
-
-fs.writeFileSync(__dirname + '/pid', process.pid);
-
 var wallpaper = require('wallpaper');
 var sqlite3 = require("sqlite3").verbose();
 var directories = require('./directories');
+var https = require('https');
 
-var date = 0;
+var localStorage = directories.localStorage;
+var momentumPath = directories.momentumPath;
+var lastDatePath = '/last-date';
 
-function setWallpaper() {
+var db = new sqlite3.Database(localStorage);
+
+var date = buildDate();
+getQuoteJSON(date, function(json) { console.log(json); });
+
+if (getLastDate() !== date) {
+  setLastDate(date);
+  setWallpaper(date, function() {
+    process.exit();
+  });
+}
+
+function getQuoteJSON(date, callback) {
+  var key = 'momentum-quote-' + date;
+  db.serialize(function() {
+    db.each("SELECT value FROM ItemTable WHERE key = '" + key + "'", function(err, row) {
+      callback(row.value.toString().replace(/\u0000/g, ''));
+    });
+  });
+}
+
+function setWallpaper(date, callback) {
+    var key = 'momentum-background-' + date;
+    db.serialize(function() {
+      db.each("SELECT value FROM ItemTable WHERE key = '" + key + "'", function(err, row) {
+        var background = JSON.parse(row.value.toString().replace(/\u0000/g, '')).filename;
+        var path;
+        if ( background.match(/http/) ) {
+          path = '/Users/Sean/Pictures/momentum/' + date + '.jpg';
+          var file = fs.createWriteStream(path);
+          var req = https.get(background, function(response) {
+            response.pipe(file);
+            response.on('end', function() {
+              set(path);                         
+            });           
+          });
+        } else {
+          path = momentumPath + background;
+          set(path);
+        }
+      });
+    });
+}
+
+function set(path) {
+  wallpaper.set(path, function (err) {
+        console.log(err);
+  });
+}
+
+function getLastDate() {
+  try {
+   return fs.readFileSync(__dirname + lastDatePath).toString();
+ } catch (e) {
+    return null;
+  }
+}
+
+function setLastDate(date) {
+  fs.writeFileSync(__dirname + lastDatePath, date);
+}
+
+function buildDate() {
   var now = new Date();
   var year = now.getFullYear();
   var month = now.getMonth() + 1;
   month = month % 10 == month ? '0' + month : month; 
-  var newDate = now.getDate();
-
-  if (date != newDate) {
-    date = newDate;
-    date = date % 10 == date ? '0' + date : date;
-    var key = 'momentum-background-' + year + '-' + month + '-' + date;
-
-    var localStorage = directories.localStorage;
-    var momentumPath = directories.momentumPath;
-
-    var db = new sqlite3.Database(localStorage);
-
-    db.serialize(function() {
-      db.each("SELECT value FROM ItemTable WHERE key = '" + key + "'", function(err, row) {
-        var background = JSON.parse(row.value.toString().replace(/\u0000/g, '')).filename;
-        var path = momentumPath + background;
-        wallpaper.set(path, function (err) {
-          if (!err)
-            console.log('Wallpaper set.');
-        });
-
-      });
-    });
-
-    db.close();
-  }
+  var date = now.getDate();
+  date = date % 10 == date ? '0' + date : date;
+  return year + '-' + month + '-' + date;
 }
-
-setWallpaper();
-setInterval(setWallpaper, 1000 * 60);
