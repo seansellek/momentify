@@ -65,12 +65,14 @@ function setWallpaper(background, callback) {
     var req = https.get(wallpaper, function(response) {
       response.pipe(file);
       response.on('end', function() {
-        set(path);                         
+        set(path); 
+        callback();                        
       });           
     });
   } else {
     path = momentumPath + wallpaper;
     set(path);
+    callback();
   }
 }
 
