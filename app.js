@@ -60,7 +60,7 @@ function setWallpaper(background, callback) {
   var wallpaper = background.filename;
   var path;
   if ( wallpaper.match(/http/) ) {
-    path = '/Users/Sean/Pictures/momentum/' + date + '.jpg';
+    path = '/Users/Sean/Pictures/momentum/' + date + '-' + background.title.replace(/\W+/, '-').toLowerCase() + '.jpg';
     var file = fs.createWriteStream(path);
     var req = https.get(wallpaper, function(response) {
       response.pipe(file);
